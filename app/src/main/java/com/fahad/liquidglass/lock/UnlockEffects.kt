@@ -68,8 +68,8 @@ fun Modifier.unlockEffect(
 ): Modifier = composed {
     val shader = remember(style) {
         if (Build.VERSION.SDK_INT < 33) null else when (style) {
-            UnlockStyle.GENIE -> RuntimeShader(GENIE)
-            UnlockStyle.RIPPLE -> RuntimeShader(RIPPLE)
+            UnlockStyle.GENIE -> runCatching { RuntimeShader(GENIE) }.getOrNull()
+            UnlockStyle.RIPPLE -> runCatching { RuntimeShader(RIPPLE) }.getOrNull()
             else -> null
         }
     }

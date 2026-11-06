@@ -77,7 +77,7 @@ half4 main(float2 p) {
     float2 c = size * 0.5;
     float2 q = abs(p - c) - (c - radius);
     float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
-    edge = smoothstep(-strength * 2.5, 0.0, d);
+    float edge = smoothstep(-strength * 2.5, 0.0, d);
     float2 dir = normalize(p - c + float2(0.0001));
     float2 sp = p - dir * edge * edge * strength;
     return content.eval(sp);
@@ -109,6 +109,9 @@ fun GlassPanel(
     val density = LocalDensity.current
     var pos by remember { mutableStateOf(Offset.Zero) }
     val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val lens = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) runCatching { RuntimeShader(LENS_AGSL) }.getOrNull() else null
+    }
 
     Box(modifier.clip(shape)) {
         if (backdrop != null) {
@@ -122,12 +125,10 @@ fun GlassPanel(
                         if (canBlur) {
                             val r = with(density) { blur.toPx() }
                             var effect = RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP)
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && size.width > 0f) {
-                                val lens = RuntimeShader(LENS_AGSL).apply {
-                                    setFloatUniform("size", size.width, size.height)
-                                    setFloatUniform("radius", with(density) { cornerRadius.toPx() })
-                                    setFloatUniform("strength", with(density) { refraction.toPx() })
-                                }
+                            if (lens != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && size.width > 0f) {
+                                lens.setFloatUniform("size", size.width, size.height)
+                                lens.setFloatUniform("radius", with(density) { cornerRadius.toPx() })
+                                lens.setFloatUniform("strength", with(density) { refraction.toPx() })
                                 effect = RenderEffect.createChainEffect(
                                     RenderEffect.createRuntimeShaderEffect(lens, "content"), effect
                                 )
