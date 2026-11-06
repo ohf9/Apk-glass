@@ -1,5 +1,7 @@
 name: Build APK
 on: [push, workflow_dispatch]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,3 +14,12 @@ jobs:
       - run: gradle :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with: { name: liquid-glass-debug-apk, path: app/build/outputs/apk/debug/*.apk }
+      # Always keep the newest APK at Releases > "latest" so it can be downloaded straight to the phone.
+      - name: Publish latest APK
+        if: github.ref == 'refs/heads/main'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk LiquidGlass.apk
+          gh release delete latest -y --cleanup-tag || true
+          gh release create latest LiquidGlass.apk --prerelease --title "Liquid Glass (آخر نسخة)" \
+            --notes "نزّل LiquidGlass.apk وثبّته. مبني من ${GITHUB_SHA::7}."

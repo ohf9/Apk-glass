@@ -13,6 +13,13 @@ android {
         versionCode = 1
         versionName = "0.1"
     }
+    // Fixed key committed to the repo so every CI build installs as an update over the last one.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("glass-debug.keystore")
+            storePassword = "android"; keyAlias = "androiddebugkey"; keyPassword = "android"
+        }
+    }
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
