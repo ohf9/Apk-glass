@@ -6,7 +6,7 @@
         <gradient android:angle="270" android:startColor="#59FFFFFF" android:endColor="#26FFFFFF" />
     </shape></item>
     <!-- sheen: bright highlight fading down the top half -->
-    <item android:bottom="50%"><shape android:shape="rectangle">
+    <item android:bottom="56dp"><shape android:shape="rectangle">
         <corners android:topLeftRadius="28dp" android:topRightRadius="28dp" />
         <gradient android:angle="270" android:startColor="#40FFFFFF" android:endColor="#00FFFFFF" />
     </shape></item>

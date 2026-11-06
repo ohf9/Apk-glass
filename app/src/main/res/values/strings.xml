@@ -2,4 +2,6 @@
     <string name="app_name">Liquid Glass</string>
     <string name="widget_clock">ساعة زجاجية</string>
     <string name="widget_stats">بطاقة زجاجية</string>
+    <string name="a11y_desc">يعرض مركز التحكم الزجاجي عند السحب من أعلى يمين الشاشة. لا يقرأ محتوى الشاشة.</string>
+    <string name="a11y_label">مركز التحكم الزجاجي</string>
 </resources>

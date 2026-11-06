@@ -94,6 +94,10 @@ fun LockCanvas(
     val behind = layout.elements.filter { depthOn && it.behindSubject }
     val front = layout.elements.filter { !(depthOn && it.behindSubject) }
 
+    val glassOn = remember { com.fahad.liquidglass.Settings(ctx).glass }
+    androidx.compose.runtime.CompositionLocalProvider(
+        com.fahad.liquidglass.glass.LocalGlassStyle provides com.fahad.liquidglass.glass.GlassStyle(enabled = glassOn)
+    ) {
     GlassRoot(backdrop = { Wallpaper(wall, layout, tilt, parallaxPx) }) {
         if (editing) Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { onSelect(null) } })
         Elements(behind, now, battery, editing, selectedId, onSelect, onElementChange, tilt, parallaxPx)
@@ -102,6 +106,7 @@ fun LockCanvas(
         }
         Elements(front, now, battery, editing, selectedId, onSelect, onElementChange, tilt, parallaxPx)
         overlay()
+    }
     }
 }
 
