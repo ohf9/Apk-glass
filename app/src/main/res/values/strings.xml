@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Liquid Glass</string>
+    <string name="widget_clock">ساعة زجاجية</string>
+    <string name="widget_stats">بطاقة زجاجية</string>
+</resources>

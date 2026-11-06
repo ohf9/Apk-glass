@@ -1,0 +1,13 @@
+<resources>
+    <style name="Theme.LiquidGlass" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">#0B1026</item>
+    </style>
+    <!-- Translucent so that, once Android unlocks, the home screen shows through our exit animation. -->
+    <style name="Theme.LiquidGlass.Lock">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+</resources>
