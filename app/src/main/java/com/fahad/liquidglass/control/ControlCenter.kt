@@ -55,6 +55,7 @@ class ControlCenterState {
     var drag by mutableFloatStateOf(0f)
     var dragging by mutableStateOf(false)
     var releases by mutableIntStateOf(0)
+    var opens by mutableIntStateOf(0)   // opened fully from the quick settings tile
     var height = 1f
     fun dragFromTrigger(dy: Float, h: Float) { dragging = true; drag = dy; height = h }
     fun releaseFromTrigger() { if (dragging) { dragging = false; releases++ } }
@@ -67,7 +68,7 @@ fun ControlCenter(
     style: GlassStyle,
     motionBlur: Float,
     bounce: Float,
-    service: AccessibilityService,
+    globalAction: ((Int) -> Boolean)?,
     onProgress: (Float) -> Unit,
     onClosed: () -> Unit,
 ) {
@@ -85,6 +86,7 @@ fun ControlCenter(
         else { progress.animateTo(0f, tween(220, easing = GlassEase)); onClosed() }
     }
     LaunchedEffect(state.releases) { if (state.releases > 0) settle() }
+    LaunchedEffect(state.opens) { if (state.opens > 0) progress.animateTo(1f, spring(damping, Spring.StiffnessLow)) }
     LaunchedEffect(Unit) { snapshotFlow { progress.value }.collect { onProgress(it) } }
     fun close(then: () -> Unit = {}) = scope.launch {
         progress.animateTo(0f, tween(240, easing = GlassEase)); onClosed(); then()
@@ -150,11 +152,14 @@ fun ControlCenter(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TorchTile(Modifier.weight(1f).rise(stagger(3)))
-                    Tile(Icons.Rounded.Screenshot, "لقطة", Modifier.weight(1f).rise(stagger(4))) {
-                        close { scope.launch { delay(350); service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) } }
-                    }
-                    Tile(Icons.Rounded.Lock, "قفل", Modifier.weight(1f).rise(stagger(5))) {
-                        close { service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN) }
+                    // These two need the optional accessibility permission; hidden without it.
+                    if (globalAction != null) {
+                        Tile(Icons.Rounded.Screenshot, "لقطة", Modifier.weight(1f).rise(stagger(4))) {
+                            close { scope.launch { delay(350); globalAction(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) } }
+                        }
+                        Tile(Icons.Rounded.Lock, "قفل", Modifier.weight(1f).rise(stagger(5))) {
+                            close { globalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN) }
+                        }
                     }
                     Tile(Icons.Rounded.DoNotDisturbOn, "عدم الإزعاج", Modifier.weight(1f).rise(stagger(6))) {
                         open(Intent(Settings.ACTION_ZEN_MODE_PRIORITY_SETTINGS))

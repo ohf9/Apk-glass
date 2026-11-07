@@ -28,6 +28,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.fahad.liquidglass.control.GlassAccessibilityService
+import com.fahad.liquidglass.control.GlassTileService
+import com.fahad.liquidglass.editor.Chips
+import com.fahad.liquidglass.launcher.IconPackInfo
+import com.fahad.liquidglass.launcher.IconPacks
+import com.fahad.liquidglass.lock.Depth
 import com.fahad.liquidglass.editor.EditorActivity
 import com.fahad.liquidglass.editor.GlassSlider
 import com.fahad.liquidglass.editor.Labeled
@@ -57,13 +62,32 @@ fun HubScreen(onOpenDemo: () -> Unit) {
     var lockOn by remember { mutableStateOf(lockPrefs.enabled) }
     var a11yOn by remember { mutableStateOf(false) }
     var batteryOk by remember { mutableStateOf(true) }
+    var overlayOk by remember { mutableStateOf(true) }
+    var filesOk by remember { mutableStateOf(true) }
+    var controlOn by remember { mutableStateOf(g.controlCenter) }
+    var pack by remember { mutableStateOf(g.iconPack) }
+    val packs = remember { IconPacks.installed(ctx) }
     val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     LifecycleResumeEffect(Unit) {
         val enabled = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
         a11yOn = enabled.contains(ComponentName(ctx, GlassAccessibilityService::class.java).flattenToString())
         batteryOk = ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName)
+        overlayOk = Settings.canDrawOverlays(ctx)
+        filesOk = Depth.canReadWallpaper(ctx)
+        LockService.sync(ctx)
         onPauseOrDispose { }
+    }
+
+    fun setControl(on: Boolean) {
+        controlOn = on; g.controlCenter = on
+        if (on) {
+            if (Build.VERSION.SDK_INT >= 33) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
+            if (!Settings.canDrawOverlays(ctx)) ctx.startActivity(
+                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}"))
+            )
+        }
+        LockService.sync(ctx)
     }
 
     fun setLock(on: Boolean) {
@@ -104,23 +128,85 @@ fun HubScreen(onOpenDemo: () -> Unit) {
                     }
                 }
 
-                Module(Icons.Rounded.Tune, "مركز التحكم", "اسحب من أعلى يمين الشاشة لتحت فوق أي تطبيق", a11yOn, {
-                    ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                }) {
-                    if (!a11yOn) Text(
-                        "فعّله من: تسهيل الاستخدام > التطبيقات المثبتة > مركز التحكم الزجاجي. لو كان مقفل: معلومات التطبيق > ⋮ > السماح بالإعدادات المقيدة.",
-                        color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp,
-                    )
+                Module(Icons.Rounded.Tune, "مركز التحكم", "اسحب من أعلى يمين الشاشة لتحت فوق أي تطبيق، أو من زر في الإعدادات السريعة", controlOn, ::setControl) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (Build.VERSION.SDK_INT >= 33) Pill("أضف زر للإعدادات السريعة", glass = false) {
+                            val sbm = ctx.getSystemService(android.app.StatusBarManager::class.java)
+                            sbm.requestAddTileService(
+                                ComponentName(ctx, GlassTileService::class.java), "تحكم زجاجي",
+                                android.graphics.drawable.Icon.createWithResource(ctx, android.R.drawable.ic_menu_manage),
+                                ctx.mainExecutor,
+                            ) { }
+                        }
+                    }
+                }
+
+                // Icon pack
+                GlassPanel(Modifier.fillMaxWidth()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("باك الأيقونات", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "الأيقونات اللي أرسمها أنا (اختصارات شاشة القفل) تاخذ من الباك. أيقونات الشاشة الرئيسية يرسمها One UI Home من إعدادات الثيمات.",
+                            color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp,
+                        )
+                        if (packs.isEmpty()) Text("ما لقيت باك أيقونات مثبت", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+                        Chips(listOf(IconPackInfo("", "الافتراضي")) + packs, (packs.firstOrNull { it.pkg == pack } ?: IconPackInfo("", "الافتراضي")),
+                            { it.label }) { pack = it.pkg; g.iconPack = it.pkg }
+                    }
                 }
 
                 Module(Icons.Rounded.Widgets, "الويجيتز", "اضغط مطولاً على الشاشة الرئيسية > ويجيتز > Liquid Glass", null, null) { }
 
-                if (!batteryOk) Pill("استثناء من توفير البطارية (ضروري في سامسونج)", modifier = Modifier.fillMaxWidth()) {
+                SetupGuide(overlayOk, filesOk, batteryOk, a11yOn)
+                if (false) Pill("استثناء من توفير البطارية (ضروري في سامسونج)", modifier = Modifier.fillMaxWidth()) {
                     ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")))
                 }
                 Pill("تجربة الواجهة الزجاجية", modifier = Modifier.fillMaxWidth()) { onOpenDemo() }
             }
         }
+    }
+}
+
+@Composable
+private fun SetupGuide(overlayOk: Boolean, filesOk: Boolean, batteryOk: Boolean, a11yOn: Boolean) {
+    val ctx = LocalContext.current
+    fun go(i: Intent) = ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    val appInfo = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))
+    GlassPanel(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("الأذونات", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            PermRow("العرض فوق التطبيقات", "ضروري لمركز التحكم وشاشة القفل", overlayOk) {
+                go(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")))
+            }
+            PermRow("الوصول لكل الملفات", "عشان أقرأ خلفية جوالك لشاشة القفل", filesOk) {
+                go(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}")))
+            }
+            PermRow("استثناء من توفير البطارية", "عشان سامسونج ما توقف الخدمة", batteryOk) {
+                go(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")))
+            }
+            PermRow("تسهيل الاستخدام (اختياري)", "يضيف زرّي لقطة الشاشة والقفل فقط", a11yOn) {
+                go(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+            Text(
+                "لو الإذن رمادي أو يقول \"إعداد مقيّد\": افتح معلومات التطبيق ثم اضغط ⋮ فوق يمين ثم \"السماح بالإعدادات المقيدة\"، وارجع للإذن. هذا قفل أندرويد 13+ للتطبيقات المثبتة من خارج المتجر.",
+                color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp,
+            )
+            Pill("فتح معلومات التطبيق", glass = false) { go(appInfo) }
+        }
+    }
+}
+
+@Composable
+private fun PermRow(title: String, why: String, ok: Boolean, onFix: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(if (ok) Icons.Rounded.CheckCircle else Icons.Rounded.ErrorOutline, null,
+            tint = if (ok) Color(0xFF6CF0C2) else Color(0xFFFFB74D))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Color.White, fontSize = 14.sp)
+            Text(why, color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
+        }
+        if (!ok) Pill("منح", glass = false, strong = true) { onFix() }
     }
 }
 

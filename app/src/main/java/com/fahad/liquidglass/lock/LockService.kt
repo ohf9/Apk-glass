@@ -17,6 +17,10 @@ import android.media.AudioManager
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
+import com.fahad.liquidglass.control.ControlCenterHost
+import com.fahad.liquidglass.Settings as GlassSettings
 
 /**
  * Keeps running in the background and opens the glass lock screen the moment the
@@ -27,9 +31,14 @@ import android.view.WindowManager
  */
 class LockService : Service() {
     private var anchor: View? = null
+    private var control: ControlCenterHost? = null
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
 
     private val screenOff = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
+            if (!LockPrefs(c).enabled) return
+            // Pick up a changed wallpaper in the background so it is ready the next time.
+            scope.launch { runCatching { Depth.syncWithSystem(applicationContext, LockStore(applicationContext)) } }
             // Don't cover the screen during a phone or VoIP call.
             val mode = getSystemService(AudioManager::class.java).mode
             if (mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_IN_COMMUNICATION) return
@@ -66,11 +75,21 @@ class LockService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (anchor == null) addAnchorOverlay()
+        val wantControl = GlassSettings(this).controlCenter
+        if (wantControl) {
+            val h = control ?: ControlCenterHost(this).also { control = it }
+            h.attach()
+            if (intent?.action == ACTION_OPEN_CONTROL) h.openFully()
+        } else {
+            control?.detach(); control = null
+        }
         return START_STICKY
     }
 
     override fun onDestroy() {
         unregisterReceiver(screenOff)
+        scope.cancel()
+        control?.detach()
         anchor?.let { runCatching { getSystemService(WindowManager::class.java).removeView(it) } }
         super.onDestroy()
     }
@@ -78,9 +97,12 @@ class LockService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
+        const val ACTION_OPEN_CONTROL = "com.fahad.liquidglass.OPEN_CONTROL"
+
+        /** Runs while either the lock screen or the control center is switched on. */
         fun sync(c: Context) {
             val i = Intent(c, LockService::class.java)
-            if (LockPrefs(c).enabled) c.startForegroundService(i) else c.stopService(i)
+            if (LockPrefs(c).enabled || GlassSettings(c).controlCenter) c.startForegroundService(i) else c.stopService(i)
         }
     }
 }

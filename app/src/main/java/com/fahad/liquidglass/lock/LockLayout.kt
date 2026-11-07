@@ -7,13 +7,17 @@ import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
-enum class ElementType(val label: String) { CLOCK("ساعة"), DATE("تاريخ"), BATTERY("بطارية"), TEXT("نص") }
+enum class ElementType(val label: String) { CLOCK("ساعة"), DATE("تاريخ"), BATTERY("بطارية"), TEXT("نص"), SHORTCUTS("اختصارات") }
 
 enum class FontChoice(val label: String, val family: FontFamily) {
     DEFAULT("افتراضي", FontFamily.Default),
     SERIF("كلاسيكي", FontFamily.Serif),
     MONO("رقمي", FontFamily.Monospace),
     CURSIVE("مزخرف", FontFamily.Cursive),
+}
+
+enum class ClockStyle(val label: String) {
+    DIGITAL("عادية"), GLASS("زجاجية"), OUTLINE("خطوط فقط"), GRADIENT("متدرجة"), ANALOG("عقارب"), DOTS("نقاط"),
 }
 
 enum class ClockFormat(val label: String, val pattern: String) {
@@ -34,6 +38,7 @@ data class LockElement(
     val glass: Boolean = false,     // frosted panel behind the element
     val behindSubject: Boolean = false, // depth effect: drawn under the cut-out subject
     val clockFormat: ClockFormat = ClockFormat.H24,
+    val clockStyle: ClockStyle = ClockStyle.DIGITAL,
     val text: String = "",
 )
 
@@ -46,12 +51,15 @@ data class LockLayout(
     val dim: Float = 0.15f,     // 0..1
     val parallax: Float = 0.6f, // 0..1
     val version: Long = 0,      // bumps when the wallpaper image changes
+    val followSystem: Boolean = true, // build on the wallpaper already set on the phone
+    val systemWallId: Int = -1,       // id of the system wallpaper we last imported
 ) {
     companion object {
         fun default() = LockLayout(listOf(
             LockElement(type = ElementType.DATE, y = 0.12f, size = 18f, weight = 500),
             LockElement(type = ElementType.CLOCK, y = 0.21f, size = 96f, weight = 300, behindSubject = true),
-            LockElement(type = ElementType.BATTERY, y = 0.86f, size = 15f, glass = true),
+            LockElement(type = ElementType.BATTERY, y = 0.80f, size = 15f, glass = true),
+            LockElement(type = ElementType.SHORTCUTS, y = 0.92f, size = 20f),
         ))
     }
 }
@@ -72,13 +80,13 @@ class LockStore(private val context: Context) {
     private fun toJson(l: LockLayout) = JSONObject().apply {
         put("hasWallpaper", l.hasWallpaper); put("hasSubject", l.hasSubject); put("depth", l.depth)
         put("wallBlur", l.wallBlur.toDouble()); put("dim", l.dim.toDouble()); put("parallax", l.parallax.toDouble())
-        put("version", l.version)
+        put("version", l.version); put("followSystem", l.followSystem); put("systemWallId", l.systemWallId)
         put("elements", JSONArray().apply {
             l.elements.forEach { e -> put(JSONObject().apply {
                 put("id", e.id); put("type", e.type.name); put("x", e.x.toDouble()); put("y", e.y.toDouble())
                 put("size", e.size.toDouble()); put("rotation", e.rotation.toDouble()); put("color", e.color)
                 put("font", e.font.name); put("weight", e.weight); put("glass", e.glass)
-                put("behindSubject", e.behindSubject); put("clockFormat", e.clockFormat.name); put("text", e.text)
+                put("behindSubject", e.behindSubject); put("clockFormat", e.clockFormat.name); put("clockStyle", e.clockStyle.name); put("text", e.text)
             }) }
         })
     }
@@ -94,13 +102,15 @@ class LockStore(private val context: Context) {
                 color = e.getLong("color"), font = enumOr(e.optString("font"), FontChoice.DEFAULT),
                 weight = e.optInt("weight", 400), glass = e.optBoolean("glass"),
                 behindSubject = e.optBoolean("behindSubject"),
-                clockFormat = enumOr(e.optString("clockFormat"), ClockFormat.H24), text = e.optString("text"),
+                clockFormat = enumOr(e.optString("clockFormat"), ClockFormat.H24),
+                clockStyle = enumOr(e.optString("clockStyle"), ClockStyle.DIGITAL), text = e.optString("text"),
             )
         }
         return LockLayout(
             els, o.optBoolean("hasWallpaper"), o.optBoolean("hasSubject"), o.optBoolean("depth", true),
             o.optDouble("wallBlur", 0.0).toFloat(), o.optDouble("dim", 0.15).toFloat(),
             o.optDouble("parallax", 0.6).toFloat(), o.optLong("version"),
+            o.optBoolean("followSystem", true), o.optInt("systemWallId", -1),
         )
     }
 

@@ -9,6 +9,15 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.cos
+import kotlin.math.sin
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -205,21 +214,97 @@ private fun ElementView(
 private val screenW: Float get() = android.content.res.Resources.getSystem().displayMetrics.widthPixels.toFloat()
 private val screenH: Float get() = android.content.res.Resources.getSystem().displayMetrics.heightPixels.toFloat()
 
+/** Set by the lock activity: unlock first, then open this intent. */
+val LocalAppLauncher = androidx.compose.runtime.staticCompositionLocalOf<(Intent) -> Unit> { {} }
+
 @Composable
 fun ElementContent(e: LockElement, now: Date, battery: Int) {
-    val style = TextStyle(
-        color = Color(e.color), fontSize = e.size.sp, fontFamily = e.font.family,
+    if (e.type == ElementType.SHORTCUTS) { Shortcuts(e); return }
+    if (e.type == ElementType.CLOCK && e.clockStyle == ClockStyle.ANALOG) { AnalogClock(e, now); return }
+    if (e.type == ElementType.CLOCK && e.clockStyle == ClockStyle.DOTS) { DotsClock(e, now); return }
+    val col = Color(e.color)
+    var style = TextStyle(
+        color = col, fontSize = e.size.sp, fontFamily = e.font.family,
         fontWeight = FontWeight(e.weight.coerceIn(100, 900)), textAlign = TextAlign.Center,
         lineHeight = if (e.type == ElementType.CLOCK) 0.95.em else 1.2.em,
         shadow = Shadow(Color.Black.copy(alpha = 0.25f), Offset(0f, 2f), 12f),
     )
+    if (e.type == ElementType.CLOCK) style = when (e.clockStyle) {
+        ClockStyle.GLASS -> style.copy(
+            brush = Brush.verticalGradient(listOf(col.copy(alpha = 0.95f), col.copy(alpha = 0.35f))),
+            shadow = Shadow(Color.White.copy(alpha = 0.45f), Offset(0f, 0f), 24f),
+        )
+        ClockStyle.OUTLINE -> style.copy(drawStyle = Stroke(width = (e.size / 28f).coerceAtLeast(1.5f)), shadow = null)
+        ClockStyle.GRADIENT -> style.copy(
+            brush = Brush.linearGradient(listOf(col, Color(0xFFFF6B9A), Color(0xFF7FB2FF))), shadow = null,
+        )
+        else -> style
+    }
     val text = when (e.type) {
         ElementType.CLOCK -> SimpleDateFormat(e.clockFormat.pattern, Locale.ENGLISH).format(now)
         ElementType.DATE -> SimpleDateFormat("EEEE، d MMMM", Locale("ar")).format(now)
         ElementType.BATTERY -> "⚡ $battery%"
         ElementType.TEXT -> e.text.ifBlank { "اكتب نصك" }
+        ElementType.SHORTCUTS -> ""
     }
     Text(text, style = style)
+}
+
+@Composable
+private fun AnalogClock(e: LockElement, now: Date) {
+    val col = Color(e.color)
+    val cal = remember(now) { java.util.Calendar.getInstance().apply { time = now } }
+    val sec = cal.get(java.util.Calendar.SECOND)
+    val min = cal.get(java.util.Calendar.MINUTE) + sec / 60f
+    val hr = (cal.get(java.util.Calendar.HOUR) % 12) + min / 60f
+    androidx.compose.foundation.Canvas(Modifier.size((e.size * 2.2f).dp)) {
+        val c = center; val r = size.minDimension / 2f
+        drawCircle(col.copy(alpha = 0.10f), r)
+        drawCircle(col.copy(alpha = 0.55f), r, style = Stroke(r * 0.02f))
+        for (i in 0 until 60) {
+            val a = Math.toRadians(i * 6.0 - 90.0)
+            val big = i % 5 == 0
+            val r1 = r * (if (big) 0.84f else 0.91f)
+            drawLine(col.copy(alpha = if (big) 0.95f else 0.4f),
+                c + Offset((cos(a) * r1).toFloat(), (sin(a) * r1).toFloat()),
+                c + Offset((cos(a) * r * 0.96f).toFloat(), (sin(a) * r * 0.96f).toFloat()),
+                strokeWidth = r * (if (big) 0.03f else 0.012f), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        }
+        fun hand(angleDeg: Float, len: Float, w: Float, color: Color) {
+            val a = Math.toRadians(angleDeg - 90.0)
+            drawLine(color, c, c + Offset((cos(a) * r * len).toFloat(), (sin(a) * r * len).toFloat()),
+                strokeWidth = w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        }
+        hand(hr * 30f, 0.5f, r * 0.07f, col)
+        hand(min * 6f, 0.75f, r * 0.045f, col)
+        hand(sec * 6f, 0.82f, r * 0.018f, Color(0xFFFF6B4A))
+        drawCircle(Color(0xFFFF6B4A), r * 0.045f, c)
+    }
+}
+
+/** Each digit is a 3x5 grid of dots. */
+@Composable
+private fun DotsClock(e: LockElement, now: Date) {
+    val col = Color(e.color)
+    val t = SimpleDateFormat("HHmm", Locale.ENGLISH).format(now)
+    val glyphs = mapOf(
+        '0' to "111101101101111", '1' to "010110010010111", '2' to "111001111100111", '3' to "111001111001111",
+        '4' to "101101111001001", '5' to "111100111001111", '6' to "111100111101111", '7' to "111001001001001",
+        '8' to "111101111101111", '9' to "111101111001111",
+    )
+    val d = e.size.dp * 0.28f
+    Row(horizontalArrangement = Arrangement.spacedBy(d * 1.2f), verticalAlignment = Alignment.CenterVertically) {
+        t.forEachIndexed { i, ch ->
+            if (i == 2) Column(verticalArrangement = Arrangement.spacedBy(d * 1.2f)) { repeat(2) { Box(Modifier.size(d).background(col, CircleShape)) } }
+            Column(verticalArrangement = Arrangement.spacedBy(d * 0.35f)) {
+                val g = glyphs[ch]!!
+                for (row in 0 until 5) Row(horizontalArrangement = Arrangement.spacedBy(d * 0.35f)) {
+                    for (cc in 0 until 3) Box(Modifier.size(d).background(
+                        if (g[row * 3 + cc] == '1') col else col.copy(alpha = 0.12f), CircleShape))
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -227,3 +312,32 @@ private fun rememberBitmap(file: java.io.File, enabled: Boolean, version: Long) 
     produceState<Bitmap?>(null, file, enabled, version) {
         value = if (enabled) withContext(Dispatchers.IO) { Depth.load(file) } else null
     }
+
+/** Phone / camera / messages shortcuts. Icons come from the icon pack chosen in settings. */
+@Composable
+private fun Shortcuts(e: LockElement) {
+    val ctx = LocalContext.current
+    val launch = LocalAppLauncher.current
+    val items = remember {
+        val pm = ctx.packageManager
+        val pack = com.fahad.liquidglass.launcher.IconPacks.load(ctx, com.fahad.liquidglass.Settings(ctx).iconPack)
+        listOf(
+            Intent(Intent.ACTION_DIAL),
+            Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA),
+            Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("smsto:")),
+        ).mapNotNull { i ->
+            val cn = pm.resolveActivity(i, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo
+                ?.let { android.content.ComponentName(it.packageName, it.name) } ?: return@mapNotNull null
+            val d = pack?.iconFor(cn) ?: runCatching { pm.getActivityIcon(cn) }.getOrNull() ?: return@mapNotNull null
+            Intent(i).setComponent(cn) to androidx.core.graphics.drawable.toBitmap(d, 128, 128).asImageBitmap()
+        }
+    }
+    val box = (e.size * 3f).dp
+    Row(horizontalArrangement = Arrangement.spacedBy(box / 3)) {
+        items.forEach { (intent, icon) ->
+            GlassPanel(Modifier.size(box).clickable { launch(intent) }, cornerRadius = box / 2, contentPadding = PaddingValues(box * 0.18f)) {
+                Image(icon, null, Modifier.fillMaxSize())
+            }
+        }
+    }
+}

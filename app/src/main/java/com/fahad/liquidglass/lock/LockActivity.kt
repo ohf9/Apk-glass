@@ -39,6 +39,7 @@ class LockActivity : ComponentActivity() {
         registerReceiver(userPresent, IntentFilter(Intent.ACTION_USER_PRESENT))
         val prefs = LockPrefs(this)
         setContent {
+          androidx.compose.runtime.CompositionLocalProvider(LocalAppLauncher provides ::openAfterUnlock) {
             LockScreen(
                 prefs = prefs,
                 unlocked = unlocked.value,
@@ -48,7 +49,18 @@ class LockActivity : ComponentActivity() {
                     @Suppress("DEPRECATION") overridePendingTransition(0, 0)
                 },
             )
+          }
         }
+    }
+
+    /** Shortcut tapped: wait for the real unlock (fingerprint/PIN), then open the app. */
+    private fun openAfterUnlock(target: Intent) {
+        val km = getSystemService(KeyguardManager::class.java)
+        val go = { runCatching { startActivity(target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }; unlocked.value = true }
+        if (preview || !km.isKeyguardLocked) { go(); return }
+        km.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+            override fun onDismissSucceeded() { go() }
+        })
     }
 
     private fun requestUnlock() {

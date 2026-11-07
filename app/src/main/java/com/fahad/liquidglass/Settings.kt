@@ -8,6 +8,12 @@ class Settings(context: Context) {
     /** The one button: glass look on/off for every module. */
     var glass: Boolean
         get() = p.getBoolean("glass", true); set(v) = p.edit().putBoolean("glass", v).apply()
+    /** Package name of the chosen icon pack ("" = the apps' own icons). */
+    var iconPack: String
+        get() = p.getString("iconPack", "")!!; set(v) = p.edit().putString("iconPack", v).apply()
+    /** Edge-swipe glass control center on/off. */
+    var controlCenter: Boolean
+        get() = p.getBoolean("controlCenter", false); set(v) = p.edit().putBoolean("controlCenter", v).apply()
     /** Blur strength (px) applied by the system behind overlays such as the control center. */
     var systemBlur: Float
         get() = p.getFloat("systemBlur", 90f); set(v) = p.edit().putFloat("systemBlur", v).apply()

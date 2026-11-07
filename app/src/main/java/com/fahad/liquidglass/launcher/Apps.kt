@@ -17,6 +17,7 @@ object Apps {
     fun load(context: Context): List<AppEntry> {
         val la = context.getSystemService(LauncherApps::class.java)
         val dpi = context.resources.displayMetrics.densityDpi
+        val pack = IconPacks.load(context, com.fahad.liquidglass.Settings(context).iconPack)
         return la.getActivityList(null, Process.myUserHandle())
             .filter { it.componentName.packageName != context.packageName }
             .map {
@@ -24,7 +25,7 @@ object Apps {
                     key = it.componentName.flattenToString(),
                     label = it.label.toString(),
                     component = it.componentName,
-                    icon = it.getBadgedIcon(dpi).toBitmap(144, 144).asImageBitmap(),
+                    icon = (pack?.iconFor(it.componentName) ?: it.getBadgedIcon(dpi)).toBitmap(144, 144).asImageBitmap(),
                 )
             }
             .sortedBy { it.label.lowercase() }

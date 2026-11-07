@@ -63,12 +63,20 @@ fun EditorScreen(onClose: () -> Unit) {
     var busy by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
+    // First time: build on the wallpaper the phone already has (no picking needed).
+    LaunchedEffect(Unit) {
+        if (layout.followSystem && !layout.hasWallpaper) {
+            busy = "جاري قراءة خلفيتك الحالية…"
+            layout = Depth.syncWithSystem(ctx, store); busy = null
+        }
+    }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         busy = "جاري قص الشخص من الصورة…"
         scope.launch {
             val found = runCatching { Depth.importWallpaper(ctx, uri, store) }.getOrDefault(false)
-            layout = layout.copy(hasWallpaper = true, hasSubject = found, version = System.currentTimeMillis())
+            layout = layout.copy(hasWallpaper = true, hasSubject = found, followSystem = false, version = System.currentTimeMillis())
             store.save(layout)
             busy = if (found) null else "ما لقيت شخص أو عنصر واضح في الصورة، تأثير العمق بيكون مطفي لها"
         }
@@ -112,9 +120,23 @@ fun EditorScreen(onClose: () -> Unit) {
                     sel != null && key == sel.id -> ElementSheet(sel, ::update,
                         onDelete = { layout = layout.copy(elements = layout.elements - sel); selected = null },
                         onDone = { selected = null })
-                    key == Tab.WALL.name -> WallSheet(layout, { layout = it }) {
-                        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }
+                    key == Tab.WALL.name -> WallSheet(layout, { layout = it },
+                        onPick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        onUseSystem = {
+                            scope.launch {
+                                busy = "جاري قراءة خلفيتك الحالية…"
+                                layout = layout.copy(followSystem = true, systemWallId = -1)
+                                store.save(layout)
+                                if (!Depth.canReadWallpaper(ctx)) {
+                                    busy = "لازم تسمح بالوصول لكل الملفات عشان أقرأ خلفية جوالك، بيفتح لك الإعداد"
+                                    ctx.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                        android.net.Uri.parse("package:${ctx.packageName}")))
+                                } else {
+                                    layout = Depth.syncWithSystem(ctx, store)
+                                    busy = if (layout.hasWallpaper) null else "ما قدرت أقرأ الخلفية (بعض خلفيات سامسونج الديناميكية ما تنقرأ). اختر صورة من المعرض"
+                                }
+                            }
+                        })
                     key == Tab.ADD.name -> AddSheet { type ->
                         val e = when (type) {
                             ElementType.CLOCK -> LockElement(type = type, size = 72f, weight = 300)
@@ -160,7 +182,12 @@ private fun ElementSheet(e: LockElement, onChange: (LockElement) -> Unit, onDele
                 ),
             )
         }
-        if (e.type == ElementType.CLOCK) Chips(ClockFormat.entries, e.clockFormat, { it.label }) { onChange(e.copy(clockFormat = it)) }
+        if (e.type == ElementType.CLOCK) {
+            Text("شكل الساعة", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+            Chips(ClockStyle.entries, e.clockStyle, { it.label }) { onChange(e.copy(clockStyle = it)) }
+            if (e.clockStyle != ClockStyle.ANALOG && e.clockStyle != ClockStyle.DOTS)
+                Chips(ClockFormat.entries, e.clockFormat, { it.label }) { onChange(e.copy(clockFormat = it)) }
+        }
         Chips(FontChoice.entries, e.font, { it.label }) { onChange(e.copy(font = it)) }
         Labeled("الحجم") { GlassSlider(e.size, 8f..220f) { onChange(e.copy(size = it)) } }
         Labeled("السماكة") { GlassSlider(e.weight.toFloat(), 100f..900f, steps = 7) { onChange(e.copy(weight = it.toInt())) } }
@@ -178,9 +205,11 @@ private fun ElementSheet(e: LockElement, onChange: (LockElement) -> Unit, onDele
 }
 
 @Composable
-private fun WallSheet(l: LockLayout, onChange: (LockLayout) -> Unit, onPick: () -> Unit) {
+private fun WallSheet(l: LockLayout, onChange: (LockLayout) -> Unit, onPick: () -> Unit, onUseSystem: () -> Unit) {
     Sheet {
-        Pill("اختيار صورة من المعرض", strong = true, glass = false, modifier = Modifier.fillMaxWidth()) { onPick() }
+        Pill(if (l.followSystem) "✓ تستخدم خلفية جوالك الحالية (تحديث)" else "استخدام خلفية جوالك الحالية",
+            strong = l.followSystem, glass = false, modifier = Modifier.fillMaxWidth()) { onUseSystem() }
+        Pill("اختيار صورة ثانية من المعرض", glass = false, modifier = Modifier.fillMaxWidth()) { onPick() }
         Toggle(
             if (l.hasSubject) "تأثير العمق" else "تأثير العمق (اختر صورة فيها شخص أو عنصر واضح)",
             l.depth && l.hasSubject,
