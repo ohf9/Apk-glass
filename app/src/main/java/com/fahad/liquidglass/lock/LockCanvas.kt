@@ -1,6 +1,7 @@
 package com.fahad.liquidglass.lock
 
 import android.content.Intent
+import androidx.core.graphics.drawable.toBitmap
 import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.os.BatteryManager
@@ -329,7 +330,7 @@ private fun Shortcuts(e: LockElement) {
             val cn = pm.resolveActivity(i, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo
                 ?.let { android.content.ComponentName(it.packageName, it.name) } ?: return@mapNotNull null
             val d = pack?.iconFor(cn) ?: runCatching { pm.getActivityIcon(cn) }.getOrNull() ?: return@mapNotNull null
-            Intent(i).setComponent(cn) to androidx.core.graphics.drawable.toBitmap(d, 128, 128).asImageBitmap()
+            Intent(i).setComponent(cn) to d.toBitmap(128, 128).asImageBitmap()
         }
     }
     val box = (e.size * 3f).dp
