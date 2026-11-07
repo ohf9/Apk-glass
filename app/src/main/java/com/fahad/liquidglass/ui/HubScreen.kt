@@ -33,6 +33,7 @@ import com.fahad.liquidglass.editor.Chips
 import com.fahad.liquidglass.launcher.IconPackInfo
 import com.fahad.liquidglass.launcher.IconPacks
 import com.fahad.liquidglass.lock.Depth
+import com.fahad.liquidglass.system.AnimationModule
 import com.fahad.liquidglass.editor.EditorActivity
 import com.fahad.liquidglass.editor.GlassSlider
 import com.fahad.liquidglass.editor.Labeled
@@ -140,6 +141,8 @@ fun HubScreen(onOpenDemo: () -> Unit) {
                         }
                     }
                 }
+
+                AnimationModule()
 
                 // Icon pack
                 GlassPanel(Modifier.fillMaxWidth()) {
