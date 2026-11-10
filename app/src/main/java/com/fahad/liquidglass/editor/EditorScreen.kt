@@ -139,7 +139,7 @@ fun EditorScreen(onClose: () -> Unit) {
                         })
                     key == Tab.ADD.name -> AddSheet { type ->
                         val e = when (type) {
-                            ElementType.CLOCK -> LockElement(type = type, size = 72f, weight = 300)
+                            ElementType.CLOCK -> LockElement(type = type, size = 110f, weight = 300, clockStyle = ClockStyle.BIG, clockFormat = ClockFormat.STACKED, behindSubject = true)
                             ElementType.TEXT -> LockElement(type = type, size = 22f, text = "")
                             else -> LockElement(type = type)
                         }
@@ -189,7 +189,11 @@ private fun ElementSheet(e: LockElement, onChange: (LockElement) -> Unit, onDele
                 Chips(ClockFormat.entries, e.clockFormat, { it.label }) { onChange(e.copy(clockFormat = it)) }
         }
         Chips(FontChoice.entries, e.font, { it.label }) { onChange(e.copy(font = it)) }
-        Labeled("الحجم") { GlassSlider(e.size, 8f..220f) { onChange(e.copy(size = it)) } }
+        Labeled("الحجم") { GlassSlider(e.size, 8f..if (e.type == ElementType.CLOCK && e.clockStyle == ClockStyle.BIG) 200f else 220f) { onChange(e.copy(size = it)) } }
+        if (e.type == ElementType.CLOCK && e.clockStyle == ClockStyle.BIG) {
+            Labeled("السماكة (رفيع ← ثقيل جداً)") { GlassSlider(e.thickness, 0.015f..0.26f) { onChange(e.copy(thickness = it)) } }
+            Labeled("عرض الأرقام") { GlassSlider(e.digitWidth, 0.35f..0.85f) { onChange(e.copy(digitWidth = it)) } }
+        } else
         Labeled("السماكة") { GlassSlider(e.weight.toFloat(), 100f..900f, steps = 7) { onChange(e.copy(weight = it.toInt())) } }
         Labeled("الدوران") { GlassSlider(e.rotation, -45f..45f) { onChange(e.copy(rotation = it)) } }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

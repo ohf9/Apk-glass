@@ -17,7 +17,7 @@ enum class FontChoice(val label: String, val family: FontFamily) {
 }
 
 enum class ClockStyle(val label: String) {
-    DIGITAL("عادية"), GLASS("زجاجية"), OUTLINE("خطوط فقط"), GRADIENT("متدرجة"), ANALOG("عقارب"), DOTS("نقاط"),
+    BIG("كبيرة عمق"), DIGITAL("عادية"), GLASS("زجاجية"), OUTLINE("خطوط فقط"), GRADIENT("متدرجة"), ANALOG("عقارب"), DOTS("نقاط"),
 }
 
 enum class ClockFormat(val label: String, val pattern: String) {
@@ -40,6 +40,8 @@ data class LockElement(
     val clockFormat: ClockFormat = ClockFormat.H24,
     val clockStyle: ClockStyle = ClockStyle.DIGITAL,
     val text: String = "",
+    val thickness: Float = 0.12f,   // BIG clock: stroke as a fraction of digit height (hairline .. very heavy)
+    val digitWidth: Float = 0.55f,  // BIG clock: digit width / height
 )
 
 data class LockLayout(
@@ -57,7 +59,7 @@ data class LockLayout(
     companion object {
         fun default() = LockLayout(listOf(
             LockElement(type = ElementType.DATE, y = 0.12f, size = 18f, weight = 500),
-            LockElement(type = ElementType.CLOCK, y = 0.21f, size = 96f, weight = 300, behindSubject = true),
+            LockElement(type = ElementType.CLOCK, y = 0.26f, size = 110f, weight = 300, behindSubject = true, clockStyle = ClockStyle.BIG, clockFormat = ClockFormat.STACKED),
             LockElement(type = ElementType.BATTERY, y = 0.80f, size = 15f, glass = true),
             LockElement(type = ElementType.SHORTCUTS, y = 0.92f, size = 20f),
         ))
@@ -86,7 +88,7 @@ class LockStore(private val context: Context) {
                 put("id", e.id); put("type", e.type.name); put("x", e.x.toDouble()); put("y", e.y.toDouble())
                 put("size", e.size.toDouble()); put("rotation", e.rotation.toDouble()); put("color", e.color)
                 put("font", e.font.name); put("weight", e.weight); put("glass", e.glass)
-                put("behindSubject", e.behindSubject); put("clockFormat", e.clockFormat.name); put("clockStyle", e.clockStyle.name); put("text", e.text)
+                put("behindSubject", e.behindSubject); put("clockFormat", e.clockFormat.name); put("clockStyle", e.clockStyle.name); put("text", e.text); put("thickness", e.thickness.toDouble()); put("digitWidth", e.digitWidth.toDouble())
             }) }
         })
     }
@@ -104,6 +106,7 @@ class LockStore(private val context: Context) {
                 behindSubject = e.optBoolean("behindSubject"),
                 clockFormat = enumOr(e.optString("clockFormat"), ClockFormat.H24),
                 clockStyle = enumOr(e.optString("clockStyle"), ClockStyle.DIGITAL), text = e.optString("text"),
+                thickness = e.optDouble("thickness", 0.12).toFloat(), digitWidth = e.optDouble("digitWidth", 0.55).toFloat(),
             )
         }
         return LockLayout(

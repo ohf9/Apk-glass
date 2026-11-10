@@ -222,6 +222,7 @@ val LocalAppLauncher = androidx.compose.runtime.staticCompositionLocalOf<(Intent
 fun ElementContent(e: LockElement, now: Date, battery: Int) {
     if (e.type == ElementType.SHORTCUTS) { Shortcuts(e); return }
     if (e.type == ElementType.CLOCK && e.clockStyle == ClockStyle.ANALOG) { AnalogClock(e, now); return }
+    if (e.type == ElementType.CLOCK && e.clockStyle == ClockStyle.BIG) { BigClock(e, now); return }
     if (e.type == ElementType.CLOCK && e.clockStyle == ClockStyle.DOTS) { DotsClock(e, now); return }
     val col = Color(e.color)
     var style = TextStyle(
@@ -341,4 +342,64 @@ private fun Shortcuts(e: LockElement) {
             }
         }
     }
+}
+
+/**
+ * Big tall clock drawn as stroked paths, so the thickness is continuous: from a hairline
+ * to a very heavy stroke (no dependency on which font weights the phone has).
+ */
+@Composable
+private fun BigClock(e: LockElement, now: Date) {
+    val col = Color(e.color)
+    val stacked = e.clockFormat != ClockFormat.H24 && e.clockFormat != ClockFormat.H12 && e.clockFormat != ClockFormat.SECONDS
+    val time = SimpleDateFormat(if (e.clockFormat == ClockFormat.H12) "hh:mm" else "HH:mm", Locale.ENGLISH).format(now)
+    val rows = if (stacked) listOf(time.substring(0, 2), time.substring(3, 5)) else listOf(time)
+    val h = e.size.dp * 1.5f
+    val w = h * e.digitWidth.coerceIn(0.3f, 0.9f)
+    val stroke = (h * e.thickness.coerceIn(0.01f, 0.3f))
+    val gap = h * 0.06f + stroke * 0.15f
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(gap * 0.7f)) {
+        rows.forEach { row ->
+            androidx.compose.foundation.Canvas(Modifier.size(
+                width = (w + gap) * row.length + stroke, height = h + stroke)) {
+                val sw = stroke.toPx(); val dw = w.toPx(); val dh = h.toPx(); val g = gap.toPx()
+                val st = Stroke(width = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round)
+                val brush = Brush.verticalGradient(listOf(col, col.copy(alpha = 0.78f)))
+                row.forEachIndexed { i, ch ->
+                    val ox = sw / 2 + i * (dw + g)
+                    if (ch == ':') {
+                        drawCircle(col, sw * 0.7f, Offset(ox + dw / 2, dh * 0.33f + sw / 2))
+                        drawCircle(col, sw * 0.7f, Offset(ox + dw / 2, dh * 0.67f + sw / 2))
+                    } else drawGlyph(ch, ox, sw / 2, dw, dh, brush, st)
+                }
+            }
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlyph(
+    ch: Char, ox: Float, oy: Float, w: Float, h: Float, brush: Brush, st: Stroke,
+) {
+    val p = androidx.compose.ui.graphics.Path()
+    fun x(v: Float) = ox + v * w
+    fun y(v: Float) = oy + v * h
+    fun M(a: Float, b: Float) = p.moveTo(x(a), y(b))
+    fun L(a: Float, b: Float) = p.lineTo(x(a), y(b))
+    fun C(a: Float, b: Float, c: Float, d: Float, e: Float, f: Float) = p.cubicTo(x(a), y(b), x(c), y(d), x(e), y(f))
+    fun oval(t: Float, b: Float, inset: Float = 0f) = p.addOval(androidx.compose.ui.geometry.Rect(x(inset), y(t), x(1f - inset), y(b)))
+    when (ch) {
+        '0' -> p.addRoundRect(androidx.compose.ui.geometry.RoundRect(x(0f), y(0f), x(1f), y(1f),
+            androidx.compose.ui.geometry.CornerRadius(w / 2, w / 2)))
+        '1' -> { M(0.15f, 0.2f); L(0.55f, 0f); L(0.55f, 1f) }
+        '2' -> { M(0f, 0.25f); C(0f, -0.08f, 1f, -0.08f, 1f, 0.28f); C(1f, 0.55f, 0f, 0.72f, 0f, 1f); L(1f, 1f) }
+        '3' -> { M(0f, 0.1f); C(0.1f, -0.05f, 1f, -0.05f, 1f, 0.25f); C(1f, 0.45f, 0.55f, 0.5f, 0.35f, 0.5f)
+            C(0.55f, 0.5f, 1f, 0.55f, 1f, 0.75f); C(1f, 1.05f, 0.1f, 1.05f, 0f, 0.9f) }
+        '4' -> { M(0.75f, 1f); L(0.75f, 0f); L(0f, 0.68f); L(1f, 0.68f) }
+        '5' -> { M(1f, 0f); L(0.08f, 0f); L(0.02f, 0.45f); C(0.3f, 0.35f, 1f, 0.4f, 1f, 0.72f); C(1f, 1.05f, 0.1f, 1.05f, 0f, 0.88f) }
+        '6' -> { M(0.95f, 0.1f); C(0.7f, -0.05f, 0f, -0.02f, 0f, 0.6f); oval(0.42f, 1f) }
+        '7' -> { M(0f, 0f); L(1f, 0f); L(0.35f, 1f) }
+        '8' -> { oval(0f, 0.52f, 0.06f); oval(0.48f, 1f) }
+        '9' -> { M(0.05f, 0.9f); C(0.3f, 1.05f, 1f, 1.02f, 1f, 0.4f); oval(0f, 0.58f) }
+    }
+    drawPath(p, brush, style = st)
 }
