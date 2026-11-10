@@ -23,3 +23,22 @@ jobs:
           gh release delete latest -y --cleanup-tag || true
           gh release create latest LiquidGlass.apk --prerelease --title "Liquid Glass (آخر نسخة)" \
             --notes "نزّل LiquidGlass.apk وثبّته. مبني من ${GITHUB_SHA::7}."
+
+  fonts:
+    # Lock-screen clock fonts (install like the ones in the reference video; pick them under "More fonts").
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install fonttools shapely pillow
+      - run: python3 fontpack/gen_fonts.py build/fonts
+      - run: fontpack/build_apks.sh build/fonts build/apks app/glass-debug.keystore
+      - uses: actions/upload-artifact@v4
+        with: { name: depth-clock-fonts, path: "build/apks/*.apk" }
+      - name: Publish fonts
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          cd build/apks && zip -q ../DepthClockFonts.zip *.apk && cd ..
+          cp fonts/preview.png DepthClockPreview.png
+          gh release delete fonts -y --cleanup-tag || true
+          gh release create fonts DepthClockFonts.zip DepthClockPreview.png --prerelease --target "$GITHUB_SHA" \
+            --title "خطوط ساعة Depth" --notes "فك الـ ZIP وثبّت الـ APK اللي تبيه، وبعدها من محرر شاشة القفل: الساعة > الخط > المزيد."
