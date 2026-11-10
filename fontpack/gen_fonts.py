@@ -20,7 +20,9 @@ X0, X1, YB, YT = 77, 690, -3540, 671
 ADV = 767
 
 # thickness name -> stroke width in font units (digit width is ~613)
-LEVELS = {"hairline": 28, "thin": 50, "regular": 78, "bold": 112, "heavy": 148, "black": 185}
+LEVELS = {"thin": 50, "regular": 78, "bold": 112, "heavy": 148, "black": 185}
+# digit height in font units: tall = like the OPPO font, shorter ones leave room for notifications / fingerprint
+HEIGHTS = {"tall": 4211, "medium": 3300, "short": 2500}
 
 def bez(p0, p1, p2, p3, n=24):
     out = []
@@ -99,6 +101,7 @@ def to_glyph(geom):
     return pen.glyph()
 
 def build(path_out, name, r, with_colon):
+    global YB
     order = ['.notdef', 'space', 'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'colon']
     names = dict(zip('0123456789', order[2:12]))
     fb = FontBuilder(1000, isTTF=True)
@@ -113,9 +116,9 @@ def build(path_out, name, r, with_colon):
         gl = glyphs[g]; gl.recalcBounds(fb.font['glyf']) if hasattr(gl, 'recalcBounds') else None
         metrics[g] = (adv[g], getattr(gl, 'xMin', 0) if gl.numberOfContours else 0)
     fb.setupHorizontalMetrics(metrics)
-    fb.setupHorizontalHeader(ascent=700, descent=-3540)
+    fb.setupHorizontalHeader(ascent=700, descent=YB)
     fb.setupNameTable({'familyName': name, 'styleName': 'Regular'})
-    fb.setupOS2(sTypoAscender=700, sTypoDescender=-3540, sTypoLineGap=0, usWinAscent=700, usWinDescent=3540,
+    fb.setupOS2(sTypoAscender=700, sTypoDescender=YB, sTypoLineGap=0, usWinAscent=700, usWinDescent=-YB,
                 sxHeight=531, sCapHeight=725, fsSelection=64, usWeightClass=400, xAvgCharWidth=500)
     fb.setupPost()
     fb.save(path_out)
@@ -130,7 +133,7 @@ def preview(out_dir, items):
         for row, txt in enumerate(("23", "38")):
             for ch in txt:
                 rec = RecordingPen(); gs[cmap[ord(ch)]].draw(rec)
-                s = 220 / 4211; ox = x; oy = 20 + row * 245
+                s = 220 / 4211; hh = YT - YB; ox = x; oy = 20 + row * 245
                 for op, args in rec.value:
                     pass
                 pts = []
@@ -148,14 +151,15 @@ def preview(out_dir, items):
 
 if __name__ == '__main__':
     out = sys.argv[1]; os.makedirs(out, exist_ok=True); items = []
-    for lvl, r in LEVELS.items():
-        for colon in (False, True):
-            id_ = f"{lvl}{'_colon' if colon else ''}"
+    for hname, h in HEIGHTS.items():
+        YB = YT - h
+        for lvl, r in LEVELS.items():
+            id_ = f"{hname}_{lvl}"
             d = os.path.join(out, id_); os.makedirs(d, exist_ok=True)
-            label = f"Depth {lvl.capitalize()}{' :' if colon else ''} - 12:34"
-            build(os.path.join(d, 'font.ttf'), f"Depth {lvl}", r, colon)
+            label = f"Depth {hname.capitalize()} {lvl.capitalize()} - 12:34"
+            build(os.path.join(d, 'font.ttf'), f"Depth {hname} {lvl}", r, False)
             open(os.path.join(d, 'font.xml'), 'w').write(
                 '<?xml version="1.0" encoding="utf-8"?>\n<font displayname="%s">\n\t<sans>\n\t\t<file>\n\t\t\t<filename>LOCKSCREENDepth%s.ttf</filename>\n\t\t\t<droidname>DroidSans.ttf</droidname>\n\t\t</file>\n\t\t<file>\n\t\t\t<filename>LOCKSCREENDepth%s.ttf</filename>\n\t\t\t<droidname>DroidSans-Bold.ttf</droidname>\n\t\t</file>\n\t</sans>\n</font>\n' % (label, id_, id_))
             json.dump({'id': id_, 'label': label, 'pkg': 'com.monotype.android.font.depthclock' + id_.replace('_', '')}, open(os.path.join(d, 'meta.json'), 'w'))
-            if not colon: items.append((lvl, os.path.join(d, 'font.ttf')))
+            if lvl == 'bold': items.append((hname, os.path.join(d, 'font.ttf')))
     preview(out, items)
