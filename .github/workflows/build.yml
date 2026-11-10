@@ -15,6 +15,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: liquid-glass-debug-apk, path: app/build/outputs/apk/debug/*.apk }
       # Always keep the newest APK at Releases > "latest" so it can be downloaded straight to the phone.
+      - name: Publish preview APK (branches other than main)
+        if: github.ref != 'refs/heads/main'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk LiquidGlass.apk
+          gh release delete preview -y --cleanup-tag || true
+          gh release create preview LiquidGlass.apk --prerelease --target "$GITHUB_SHA" --title "Liquid Glass (نسخة تجريبية)" \
+            --notes "نسخة تجريبية من الفرع ${GITHUB_REF_NAME}، مبنية من ${GITHUB_SHA::7}."
       - name: Publish latest APK
         if: github.ref == 'refs/heads/main'
         env: { GH_TOKEN: "${{ github.token }}" }
